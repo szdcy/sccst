@@ -1,6 +1,7 @@
 import csv
 import numpy as np
 import re
+import sys
 
 
 def read_total_gene_in_human():
@@ -252,6 +253,12 @@ class TypesProfileNode(CellType):
         self.own_types.append(cell_type)
         TypesProfileNode.all_own_types.append(cell_type)
 
+    def add_nickname(self, nickname):
+        # Add a nickname to the TypesProfileNode instance
+        self.nicknames.extend(nickname)
+        for nickname in nickname:
+            TypesProfileNode.all_profile_node[nickname] = self
+
 
 def get_source(all_profile, all_cell_type):
     for profile_node in all_profile:
@@ -400,16 +407,23 @@ def most_similar(sub_cell_type, query_marker_gene_list, score_cutoff, rank_coeff
     query_matrix = np.array([query_list])
     result_matrix = np.dot(query_matrix, np.array(reference_list))
     max_match = result_matrix.argmax()
-    print(list(map(lambda x: x.name, colName)))
-    print(result_matrix)
     if result_matrix.max() <= score_cutoff:
         return "Unaligned cell"
     else:
         return colName[max_match]
 
 
-def search_through_level(query_marker_gene_list, score_cut_off, depth_cut_off, rank_coefficient, start_node):
-    profile_in_this_level = [TypesProfileNode.all_profile_node[start_node]]
+def search_through_level(query_marker_gene_list, score_cut_off, depth_cut_off, rank_coefficient, start_nodes):
+    profile_in_this_level = []
+    for start_node in start_nodes:
+        profile_in_this_level.append(TypesProfileNode.all_profile_node[start_node])
+    if len(profile_in_this_level) > 1:
+        most_similar_cell_type = most_similar(profile_in_this_level, query_marker_gene_list, score_cut_off,
+                                              rank_coefficient)
+        if most_similar_cell_type == "Unaligned cell":
+            return "Unaligned cell"
+        else:
+            profile_in_this_level = [most_similar_cell_type]
     depth = 0
     while len(profile_in_this_level) != 0:
         profile_in_next_level = []
@@ -436,7 +450,9 @@ def search_through_level(query_marker_gene_list, score_cut_off, depth_cut_off, r
 
 
 def read_query(file, all_cell_type, rank_coefficient=0.9, score_cut_off=0, depth_cut_off=2,
-               enrichment_coefficient=0.5, start_node='Unaligned cell'):
+               enrichment_coefficient=0.5, start_node=None):
+    if start_node is None:
+        start_node = ['Unaligned cell']
     enrich(all_cell_type[0], enrichment_coefficient)
     # Read the query file and create a list of gene of cell clusters
     with open(file, newline='') as f:
@@ -504,9 +520,25 @@ def main(avg):
 
 
 if __name__ == "__main__":
-    avg = (r"\\10.20.5.147\data417\dingcy\rstudio\2020 Lineage-dependent gene expression programs influence the "
-           r"immune landscape of colorectal cancer\crc_CD4_cell_markers_resolution=2.csv",
-           r"\\10.20.5.147\data417\dingcy\rstudio\2020 Lineage-dependent gene expression programs influence the "
-           r"immune landscape of colorectal cancer\crc_CD4_cell_markers_result.csv", 0.9, 0, 10, 0.5, 'CD4 T cell'
-           )
+    # avg[0] is the file path of the query file
+    # avg[1] is the file path of the result file
+    # avg[2] is the rank coefficient
+    # avg[3] is the score cut off
+    # avg[4] is the depth cut off
+    # avg[5] is the enrichment coefficient
+    # avg[6] is the start node
+    avg = [r"DEG_example.csv",
+           r"result_example.csv", 0.9, 0, 1, 0.5, 'Unaligned cell'
+           ]
+    if len(sys.argv) < 7:
+        print("Wrong input! SCCST will take the default input.")
+    else:
+        avg = sys.argv[1:]
+        avg[2] = float(avg[2])
+        avg[3] = int(avg[3])
+        avg[4] = int(avg[4])
+        avg[5] = float(avg[5])
+    start_node = avg[6:]
+    avg = avg[:6]
+    avg.append(start_node)
     main(avg)
